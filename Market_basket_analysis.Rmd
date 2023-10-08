@@ -1,0 +1,307 @@
+---
+title: "Market basket analysis"
+author: "Ibeh Amaka"
+date: '2023-10-08'
+output:
+  html_document: default
+  word_document: default
+---
+Executive summary:
+Market basket analysis is a powerful technique that helps us uncover patterns and associations within customer purchase data. We gain valuable insights into customer behaviour, preferences, and purchasing habits by analysing transactions. In this report, I present the findings of our market basket analysis.
+
+
+Introduction:
+Market basket analysis is a data mining technique crucial in understanding customer behaviour and optimizing business strategies. This report delves into market basket analysis to extract meaningful insights from our transaction data. The primary objective of this analysis is to uncover purchasing patterns, identify product associations, and ultimately enhance our business operations.
+This analysis uses transaction data collected over the past year, covering in-store and online purchases. By applying market basket analysis, we aim to better understand our customers' preferences and behaviours, enabling us to make data-driven decisions that benefit our organization.
+This report is tailored for our marketing and sales teams and senior management, who will use the insights derived from this analysis to refine marketing strategies, improve inventory management, and enhance the overall customer experience. The following sections will explore the methodology, key findings, and actionable recommendations resulting from our market basket analysis.
+Data Sourcing and preprocessing:
+•	The data was collected from the Kaggel database, which consists of 522065 rows and seven attributes.   
+•	File name: Assignment-1_Data
+•	List name: retaildata
+•	File format: xlsx
+
+•	Number of Attributes: 7
+o	BillNo: 6-digit number assigned to each transaction. Nominal.
+o	Itemname: Product name. Nominal.
+o	Quantity: The quantities of each product per transaction. Numeric.
+o	Date: The day and time when each transaction was generated. Numeric.
+o	Price: Product price. Numeric.
+o	CustomerID: 5-digit number assigned to each customer. Nominal.
+o	Country: Name of the country where each customer resides. Nominal.
+
+
+Load the required libraries (install them if necessary)
+```{r}
+library(readxl)
+library(readr)
+library(tidyverse)
+library(tidyr)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(plotly)
+library(arules)
+library(viridis)
+library(arulesViz)
+
+```
+
+
+```{r market}
+market <- read_excel("C:/Users/ibeha/OneDrive/Desktop/MY R DATASET/K-NN market basket analysis/Assignment-1_Data.xlsx")
+```
+When loading the dataset we can see that there is a warning message saying expecting number but getting
+numeric with alphebets. We will handle that in data preprocessing
+
+
+Data Preprocessing: 
+Data cleaning: Initial steps involved identifying and handling missing values, checking the data structure, and using the summary method to display the summary statistics of the data. I found that the minimum quantity and price were negative. This could mean there were data entry errors or some items were free. This was handled by removing the rows. Bill number was also checked to remove the rows that contain alphabet and digit and also item columns that contains items not sold by the company.
+Feature engineering: The date column contains the year, month and time, and a new column was created to separate the date and month. In addition, a new column containing total sales was created, combining price and quantity. 
+
+
+```{r}
+dim(market)
+str(market)
+#lets perform a summary statistic
+summary(market)
+##data shows that there anr nagative quantity and price, and missing numbers in Bill number
+##lets see the missing numbers
+missing_values <- colSums(is.na(market))
+missing_values
+# Filter rows where 'BillNo' column contains non-digit values
+filtered_df <- market[!grepl("^\\d+$", market$BillNo), ]
+filtered_df
+#we see that the rows for bills that contains non-digit number 
+market  <- market [market$Itemname != "Adjust bad debt", ]
+market<- market %>%
+  filter(!(Itemname %in% c("POSTAGE", "DOTCOM POSTAGE", "Adjust bad debt", "Manual")))
+# Check if all 'BillNo' values do not include letters
+all_digits <- all(!grepl("[A-Za-z]", market$BillNo))
+#drop rows where price is greater than 0
+market <- subset(market, Quantity > 0)
+market <- subset(market, Price > 0)
+#let us seperate the date dataset to year and month
+market$year <- year(market$Date)
+market$month <- month(market$Date)
+market$TotalPrice <- market$Quantity * market$Price
+```
+Methodology:
+
+Association rules are fundamental in data mining and analytics, particularly in market basket analysis. Association rules reveal interesting patterns, relationships, or associations between items in a dataset. They are used to uncover hidden insights and make data-driven decisions. Here's a detailed explanation of association rules:
+
+*1. Items:* In data mining, items refer to individual elements, objects, or products that can be part of a dataset. In the context of market basket analysis, items are often products that customers purchase.
+
+*2. Transactions:* A transaction represents a single event or record in a dataset. It typically contains a list of items bought or acquired together during a specific occurrence, such as a customer's purchase during a store visit or an online shopping session.
+
+*3. Association Rules:* Association rules are logical statements or patterns that describe the relationships between items in a dataset. These rules consist of two main parts:
+
+   - *Antecedent (Left-hand side or LHS):* This is a set of items found together in transactions. It represents the condition or items that precede or are associated with the consequent.
+   
+   - *Consequent (Right-hand side or RHS):* This is a set of items that tend to appear together with the antecedent in the same transactions. It represents the outcome or items that follow or are associated with the antecedent.
+
+*4. Metrics:* Association rules are typically evaluated using various metrics that measure the relationship strength, significance, or quality between items. The most common metrics include:
+
+   - *Support:* It measures the proportion of transactions that contain both the antecedent and the consequent. High support indicates that the rule is applicable to a significant portion of transactions.
+
+   - *Confidence:* It measures the conditional probability that the consequent will occur given the antecedent. High confidence suggests a strong association between the antecedent and consequent.
+
+   - *Lift:* Lift measures how much more likely the consequent is to occur when the antecedent is present compared to when it is not. A lift value greater than 1 indicates a positive association.
+
+*5. Example:* Let's consider a simplified example in the context of a retail store. An association rule might be: "If a customer buys bread (antecedent), they are likely to buy butter (consequent)." The rule could be expressed with metrics like "Support: 10%, Confidence: 80%, Lift: 1.2."
+
+   - *Support (10%):* This means that 10% of all dataset transactions contain bread and butter.
+   
+   - *Confidence (80%):* Given that a customer buys bread, there is an 80% chance they will also buy butter in the same transaction.
+   
+   - *Lift (1.2):* Customers are 1.2 times more likely to buy butter when buying bread than the overall likelihood of buying butter.
+
+*6. Apriori Algorithm:* One of the popular algorithms used for generating association rules is the Apriori algorithm, which efficiently identifies frequent itemsets and derives association rules from transaction data.
+This method is used for this analysis.
+
+
+
+Exploratory data analysis
+
+Result and Analysis
+
+```{r}
+total_price <- market %>% 
+  group_by(year,month) %>%
+  summarise(Total_Price = sum(TotalPrice), total_quantity = sum(Quantity)) 
+
+total_price_df_long <- pivot_longer(total_price, 
+                                    cols = c(Total_Price, total_quantity), 
+                                    names_to = "Variable", 
+                                    values_to = "Value")
+```
+
+
+```{r}
+ggplot(total_price_df_long, aes(x = interaction(year, month), y = Value, fill = Variable)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Quantity and Price Over Time", x = "Year-Month", y = "Value", fill = "Variable") +
+  scale_fill_manual(values = c("Total_Price" = "blue", "total_quantity" = "green")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+September, October and November has the highest quantity and sales
+
+
+```{r}
+monthly_sales <- market %>%
+  group_by(month,Country) %>%
+  summarise(month_sales = sum(TotalPrice)) 
+
+plot_ly(data = monthly_sales, x = ~factor(month, levels = 1:12), y = ~month_sales, 
+        type = 'bar', color = ~Country, text = ~paste("Country: ", Country, "<br>Value: $", month_sales)) %>%
+  layout(title = "Monthly Sales by Country",
+         xaxis = list(title = "Month", tickvals = 1:12, ticktext = month.abb[1:12]),
+         yaxis = list(title = "Sales"),
+         barmode = 'stack')
+
+```
+
+We can see that United Kingdom has the highest sales
+```{r}
+item_purchase_sales <- market %>%
+  group_by(Itemname) %>%
+  summarise(total_sales = sum(TotalPrice)) %>%
+  ungroup() %>% 
+  arrange(desc(total_sales))  
+top_10_items <- item_purchase_sales %>%
+  head(10)
+top_10_items
+
+```
+
+```{r}
+item_purchase <- market %>%
+  group_by(Itemname) %>%
+  summarise(total_quantity = sum(Quantity)) %>%
+  ungroup() %>% 
+  arrange(desc(total_quantity))  
+top_10_items <- item_purchase %>%
+  head(10)
+top_10_items
+```
+
+Association Rule will be used
+Assuming there are 19 customers, 10 of them bought shirt and 12 bought shoes
+customers that bought shirt and shoes
+Rule
+Lhs ......> Rhs
+Shirt ......> shoes
+
+Frequency
+frq(Lhs,Rhs)
+frq(shirt, shoes) = 8
+
+Support
+frq (Lhs,Rhs)/n
+8/19 = 0.42
+
+Confidence
+freq(Lhs,Rhs)/freq(Lhs)
+8/10 = 0.8
+
+lift 
+Support/support(Lhs) * support(Rhs)
+
+support/support(shirt) * support(shoes)
+8/19
+---------------
+10/19 *12/19 = 1.27
+
+```{r}
+data <- split(x = market$Itemname,
+                   f = market$BillNo)
+## Transactions formatting
+data.transactions <- as(object = data,
+                        Class = "transactions")
+class(data.transactions)
+inspect(head(data.transactions))
+
+```
+
+```{r}
+windows()  # For Windows
+# Create the item frequency plot
+itemFrequencyPlot(x = data.transactions,
+                  type = "relative",
+                  topN = 10,
+                  horiz = TRUE,
+                  col = viridis(n = 10))
+```
+
+
+```{r}
+#let's define some boundaries with apriori algorithm
+rules <- apriori(data = data.transactions,
+                 parameter = list(supp = .01,
+                                  conf = .5,
+                                  minlen = 2,
+                                  maxlen = 5,
+                                  target = "rules"))
+
+```
+supp: This is short for "support." It specifies the minimum support threshold. Support is a measure of how frequently an itemset (a set of items) appears in the dataset. 
+The supp parameter of 0.01 means that only itemsets that appear in at least 1% of the transactions will be considered.
+This is short for "confidence." It specifies the minimum confidence threshold. Confidence measures how often a rule is true. 
+A confidence of 0.5 (or 50%) means that a rule must be true at least 50% of the time for it to be considered.
+minlen and maxlen: These parameters specify the minimum and maximum length of the rules to be generated. In this case, it generates rules with a minimum length of 2 items and a maximum length of 5 items.
+Target: This parameter specifies the type of result you want. In this case, "rules" indicates that you want to generate association rules.
+
+```{r}
+inspect(head(rules, n = 10), ruleSep = "----->", itemsep = " + ")
+
+#rules by by lift
+ruleslift = sort (rules, by = "lift", decrease = TRUE)
+inspect(head(ruleslift, n= 10))
+
+```
+In the top list value of the purchase, it means that customers are 75% more likely to buy "GREEN REGENCY TEACUP AND SAUCER" if you sell "PINK REGENCY TEACUP AND SAUCER".
+
+```{r}
+#rules by confidence
+rulesConf = sort (rules, by = "confidence", decrease = TRUE)
+inspect(head(rulesConf, n = 10))
+
+```
+In the top confidence value of the purchase, it means that 96% of the customers who bought
+{HERB MARKER MINT, HERB MARKER THYME}  also bought {HERB MARKER ROSEMARY}also bought {HERB MARKER PARSLEY} rules by support
+
+```{r}
+#rules by support
+rulesSupp = sort (rules, by = "support", decrease = TRUE)
+inspect(head(rulesSupp, n = 10))
+```
+In the top support value of purchase, it means that "{JUMBO BAG PINK POLKADOT also {JUMBO BAG RED RETROSPOT}" is present in 4% of all purchases
+plot 10 items
+```{r}
+par(mar=c(5, 5, 2, 2))
+# Create the item frequency plot
+itemFrequencyPlot(data.transactions, topN = 10, type = "absolute", main = "Top 10 items")
+#calculating support for most frequent items
+itemsets = eclat(data.transactions,parameter = list(supp = 0.03,maxlen=3))
+inspect(itemsets)
+```
+we see the set of items that goes hand in hand
+```{r}
+inspect(head(rules, n = 10))
+
+plot(rules,
+     method = "graph",
+     shading = "support",
+     engine = "htmlwidget")
+
+```
+
+Recommendation
+
+Cross-Selling Opportunities:
+Customers who bought CHILDRENS CUTLERY DOLLY GIRL has a 76% probability of buying CHILDRENS CUTLERY SPACEBOY. customers who bought CHILDRENS CUTLERY POLKADOT BLUE has a 61% probability of buying CHILDRENS CUTLERY POLKADOT PINK.  customers who bought HERB MARKER MINT has a 86% probability of buying  HERB MARKER THYME. With customer ID we can identify customers and offer discounts when both items are purchased.    
+
+Product Placement and Store Layout:
+
+Arrange products in physical stores or online platforms based on their associations. Place complementary products closer to each other to encourage customers to buy them together. Example  HERB MARKER MINT and  HERB MARKER THYME should be located close together.
